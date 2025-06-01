@@ -3,19 +3,18 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 
-# Sayfa konfigürasyonu (ilk satırda olmalı)
+# Sayfa konfigürasyonu
 st.set_page_config(page_title="Teslimat Takvimi", layout="centered")
-st.markdown("<h4 style='font-size:22px;'>📅 Haftalık Teslimat Takvimi</h4>", unsafe_allow_html=True)
+st.markdown("#### 📅 Teslimat Takvimi")
 
-# CSV yolu
-CSV_PATH = "data/teslimatlar.csv"
+# CSV dosya yolu
+CSV_PATH = "teslimatlar.csv"
 
-# CSV yoksa başlıklarla oluştur
+# CSV dosyası yoksa oluştur
 if not os.path.exists(CSV_PATH):
-    df = pd.DataFrame(columns=["tarih", "tur", "sira", "musteri", "not", "genel_not"])
-    df.to_csv(CSV_PATH, index=False)
+    pd.DataFrame(columns=["tarih", "tur", "sira", "musteri", "not"]).to_csv(CSV_PATH, index=False)
 
-# Veri yükleme/kaydetme
+# Veri yükle
 @st.cache_data
 def load_data():
     return pd.read_csv(CSV_PATH)
@@ -23,28 +22,30 @@ def load_data():
 def save_data(df):
     df.to_csv(CSV_PATH, index=False)
 
-# Haftanın günlerini döndür
+# Haftalık tarih aralığı
 def get_week_dates(date):
     monday = date - timedelta(days=date.weekday())
     return [monday + timedelta(days=i) for i in range(6)]  # Pazartesi–Cumartesi
 
-# Gün çevir
+# Gün çevirisi
 gun_cevir = {
     "Monday": "Pazartesi", "Tuesday": "Salı", "Wednesday": "Çarşamba",
     "Thursday": "Perşembe", "Friday": "Cuma", "Saturday": "Cumartesi"
 }
 
-# Tarih seçimi
+# Haftayı seç
 hafta_tarihi = st.date_input("📌 Haftayı Seç", value=datetime.today())
 hafta_gunleri = get_week_dates(hafta_tarihi)
+
+# Veri oku
 df = load_data()
 
-# Tarih dönüşüm
+# Tarih tipi dönüştür
 if not df.empty:
     df["tarih"] = pd.to_datetime(df["tarih"], errors="coerce")
     df = df.dropna(subset=["tarih"])
 
-# Gün bazlı görünüm
+# Günleri sırayla işle
 for gun in hafta_gunleri:
     gun_str = gun.strftime("%Y-%m-%d")
     gun_veri = df[df["tarih"] == gun_str]
@@ -52,15 +53,14 @@ for gun in hafta_gunleri:
     for en, tr in gun_cevir.items():
         gun_baslik = gun_baslik.replace(en, tr)
 
-    st.markdown(f"<h5 style='margin-top:30px;'>📌 {gun_baslik}</h5>", unsafe_allow_html=True)
-
-    turlar = gun_veri["tur"].dropna().unique()
-    if len(turlar) == 0:
+    st.markdown(f"**📌 {gun_baslik}**")
+    if gun_veri.empty:
         st.info("Henüz planlanmış teslimat yok. Yeni tur ekleyebilirsiniz.")
 
+    turlar = gun_veri["tur"].dropna().unique()
     for tur in sorted(turlar):
         tur_veri = gun_veri[gun_veri["tur"] == tur].sort_values("sira")
-        with st.expander(f"🚛 {tur}. Tur", expanded=False):
+        with st.expander(f"🚛 {tur}. Tur"):
             st.data_editor(
                 tur_veri[["sira", "musteri", "not"]].reset_index(drop=True),
                 column_config={
@@ -72,15 +72,11 @@ for gun in hafta_gunleri:
                 use_container_width=True,
                 disabled=True
             )
-            if "genel_not" in tur_veri.columns and tur_veri["genel_not"].notna().any():
-                genel = tur_veri["genel_not"].dropna().unique()[0]
-                st.markdown(f"<div style='font-size:13px; margin-top:8px;'><b>📌 Genel Not:</b> {genel}</div>", unsafe_allow_html=True)
 
-    # Yeni tur ekleme alanı
+    # Yeni tur ekleme formu
     with st.expander("➕ Tur"):
         yeni_tur_no = st.number_input("Tur No", min_value=1, max_value=10, value=1, key=f"tur_{gun_str}")
         teslimat_sayisi = st.number_input("Teslimat Nokta Sayısı", min_value=1, max_value=10, value=3, key=f"adet_{gun_str}")
-        genel_not = st.text_area("📌 Genel Not (Tur için)", key=f"genel_{gun_str}")
         musteri_listesi, not_listesi = [], []
 
         for i in range(teslimat_sayisi):
@@ -95,10 +91,9 @@ for gun in hafta_gunleri:
                 "tur": [yeni_tur_no] * teslimat_sayisi,
                 "sira": list(range(1, teslimat_sayisi + 1)),
                 "musteri": musteri_listesi,
-                "not": not_listesi,
-                "genel_not": [genel_not] * teslimat_sayisi
+                "not": not_listesi
             })
             df = pd.concat([df, yeni_kayitlar], ignore_index=True)
             save_data(df)
-            st.success("✅ Tur kaydedildi.")
+            st.success("✅ Tur başarıyla kaydedildi.")
             st.rerun()
