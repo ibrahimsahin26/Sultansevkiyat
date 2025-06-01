@@ -1,5 +1,1 @@
-tarih,gün,tur_no,sira_no,musteri,not
-2025-06-03,Salı,1,1,Müşteri A,Pos götürülecek
-2025-06-03,Salı,1,2,Müşteri B,Tahsilat var
-2025-06-03,Salı,2,1,Müşteri C,
-2025-06-04,Çarşamba,1,1,Müşteri D,
+tarih,tur,sira,musteri,not
