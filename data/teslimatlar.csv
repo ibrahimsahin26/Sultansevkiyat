@@ -1,2 +1,6 @@
-tarih,tur,sira,musteri,not,genel_not
-2025-06-01,1,1,Örnek Müşteri,Açıklama,Genel not örneği
+tarih,tur,sira,musteri,not
+2025-06-02,1,1,Market A,Tahsilat yapılacak
+2025-06-02,1,2,Bakkal B,
+2025-06-02,1,3,Restoran C,Soğuk ürün teslimatı
+2025-06-03,2,1,Kafe D,Kutu teslimi
+2025-06-03,2,2,Süpermarket E,
