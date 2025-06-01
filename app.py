@@ -94,4 +94,4 @@ for gun in hafta_gunleri:
             df = pd.concat([df, yeni_kayitlar], ignore_index=True)
             save_data(df)
             st.success("✅ Tur kaydedildi.")
-            st.experimental_rerun()
+            st.rerun()
