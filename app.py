@@ -6,7 +6,7 @@ import os
 st.set_page_config(page_title="Teslimat Takvimi", layout="centered")
 st.markdown("#### 📅 Teslimat Takvimi")
 
-CSV_PATH = "teslimatlar.csv"
+CSV_PATH = "data/teslimatlar.csv"
 
 # İlk çalıştırmada CSV dosyasını oluştur
 if not os.path.exists(CSV_PATH):
