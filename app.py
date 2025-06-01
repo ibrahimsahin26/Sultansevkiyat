@@ -1,45 +1,56 @@
 import streamlit as st
-from datetime import datetime, timedelta
 import pandas as pd
-from utils.io import load_data
-
-st.set_page_config(page_title="Teslimat Takvimi", layout="centered")
-
-st.title("📅 Teslimat Takvimi")
+from datetime import date, timedelta
+from utils.io import load_data, save_data
 
 DATA_PATH = "data/teslimatlar.csv"
 
-# Veri yükle
+st.set_page_config(page_title="Teslimat Takvimi", layout="wide")
+st.title("📅 Haftalık Teslimat Takvimi")
+
+# 📅 Bugünün haftasını ve tarih aralığını hesapla
+bugun = date.today()
+hafta_basi = bugun - timedelta(days=bugun.weekday())  # Pazartesi
+hafta_sonu = hafta_basi + timedelta(days=5)  # Cumartesi
+
+hafta_label = f"{hafta_basi.strftime('%d %B')} - {hafta_sonu.strftime('%d %B %Y')}"
+st.subheader(f"📆 {hafta_label} Haftası")
+
 df = load_data(DATA_PATH)
+df["tarih"] = pd.to_datetime(df["tarih"], errors="coerce")
+df = df.dropna(subset=["tarih"])
+df = df.sort_values(by=["tarih", "tur", "sira"])
 
-# Tarih seçici
-secili_tarih = st.date_input("Tarih Seçin", value=datetime.today())
+# 📅 Haftalık veri filtrele
+mask = (df["tarih"] >= pd.to_datetime(hafta_basi)) & (df["tarih"] <= pd.to_datetime(hafta_sonu))
+df_hafta = df[mask]
 
-# Gün adını al
-gun_adi = secili_tarih.strftime("%A")  # Monday, Tuesday...
-gun_tr = {
-    "Monday": "Pazartesi", "Tuesday": "Salı", "Wednesday": "Çarşamba",
-    "Thursday": "Perşembe", "Friday": "Cuma", "Saturday": "Cumartesi", "Sunday": "Pazar"
-}
-gun = gun_tr.get(gun_adi, gun_adi)
+# 📌 Her gün için akordeonlu görünüm
+for i in range(6):  # Pazartesi - Cumartesi
+    gun_tarih = hafta_basi + timedelta(days=i)
+    gun_label = gun_tarih.strftime("%A - %d %B")
+    gun_df = df_hafta[df_hafta["tarih"] == pd.to_datetime(gun_tarih)]
 
-st.markdown(f"### 📆 {secili_tarih.strftime('%d %B %Y')} - {gun}")
+    with st.expander(f"📍 {gun_label}"):
+        if gun_df.empty:
+            st.info("Bu gün için planlanmış teslimat yok.")
+        else:
+            # Tur gruplarına göre sırala
+            for tur_adi, grup in gun_df.groupby("tur"):
+                st.markdown(f"#### 🚚 {tur_adi}")
 
-# Bu tarihte tanımlı teslimat var mı?
-if df is not None and not df.empty:
-    df["tarih"] = pd.to_datetime(df["tarih"], errors="coerce")
-    df_tarih = df[df["tarih"] == pd.to_datetime(secili_tarih)]
+                edit_df = grup[["sira", "musteri", "not"]].reset_index(drop=True)
+                edited = st.data_editor(edit_df, num_rows="dynamic", key=f"editor_{gun_tarih}_{tur_adi}")
 
-    if not df_tarih.empty:
-        tur_gruplari = df_tarih.groupby("tur_no")
-        for tur_no, grup in tur_gruplari:
-            st.markdown(f"#### 🚚 {tur_no}. Tur")
-            for i, row in grup.iterrows():
-                musteri = row["musteri"]
-                not_ = row.get("not", "")
-                durum = row.get("teslim_durumu", "Planlandı")
-                st.markdown(f"- **{musteri}** {'🔖 _'+not_+'_' if not_ else ''} `[{durum}]`")
-    else:
-        st.info("Bu tarihe ait herhangi bir teslimat planı bulunmamaktadır.")
-else:
-    st.info("Henüz hiç teslimat verisi girilmemiş.")
+                if st.button("💾 Değişiklikleri Kaydet", key=f"save_{gun_tarih}_{tur_adi}"):
+                    for idx, row in edited.iterrows():
+                        mask_update = (
+                            (df["tarih"] == gun_tarih) &
+                            (df["tur"] == tur_adi) &
+                            (df["sira"] == row["sira"])
+                        )
+                        df.loc[mask_update, "musteri"] = row["musteri"]
+                        df.loc[mask_update, "not"] = row["not"]
+
+                    save_data(df, DATA_PATH)
+                    st.success("Değişiklikler kaydedildi.")
