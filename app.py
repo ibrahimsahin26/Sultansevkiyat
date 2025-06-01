@@ -45,4 +45,6 @@ for gun_tarih, gun_adi in zip(hafta_gunleri, gun_adlari):
 
     for tur_no in range(1, 4):
         tur_df = gun_df[gun_df["tur"] == tur_no].sort_values("sira")
-        with st.expander(f"🚚 {tur}"):
+        for tur in [1, 2, 3]:
+        with st.expander(f"🚛 {tur}. Tur"):
+        st.table([["1", "Müşteri A", "Not girilmedi"], ["2", "Müşteri B", "Tahsilat yapılacak"]])
