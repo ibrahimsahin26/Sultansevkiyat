@@ -4,71 +4,72 @@ from datetime import datetime, timedelta
 
 CSV_PATH = "teslimatlar.csv"
 
-# Veri yükleme ve kaydetme
+# Eğer CSV yoksa oluştur
+try:
+    pd.read_csv(CSV_PATH)
+except FileNotFoundError:
+    pd.DataFrame(columns=["tarih", "tur", "sira", "musteri", "not"]).to_csv(CSV_PATH, index=False)
+
 @st.cache_data
 def load_data():
-    try:
-        df = pd.read_csv(CSV_PATH)
-        df["tarih"] = pd.to_datetime(df["tarih"], errors="coerce")
-        df = df.dropna(subset=["tarih"])
-        return df
-    except:
-        return pd.DataFrame(columns=["tarih", "tur", "sira", "musteri", "not"])
+    return pd.read_csv(CSV_PATH)
 
 def save_data(df):
     df.to_csv(CSV_PATH, index=False)
 
-def get_week_dates(date):
-    monday = date - timedelta(days=date.weekday())
-    return [monday + timedelta(days=i) for i in range(6)]
+def get_week_dates(selected_date):
+    monday = selected_date - timedelta(days=selected_date.weekday())
+    return [monday + timedelta(days=i) for i in range(6)]  # Pazartesi–Cumartesi
 
-# Sayfa ayarları
-st.set_page_config(page_title="Teslimat Güncelleme", layout="centered")
-st.title("📋 Teslimat Güncelleme Paneli")
+# Başlık
+st.set_page_config(page_title="Teslimat Takvimi", layout="centered")
+st.title("📅 Haftalık Teslimat Takvimi")
 
-hafta_tarihi = st.date_input("📆 Haftayı Seç", value=datetime.today())
+# Tarih Seç
+hafta_tarihi = st.date_input("📌 Haftayı Seç", value=datetime.today())
 hafta_gunleri = get_week_dates(hafta_tarihi)
+
+# Veriyi yükle
 df = load_data()
+if not df.empty:
+    df["tarih"] = pd.to_datetime(df["tarih"], errors="coerce")
+    df = df.dropna(subset=["tarih"])
 
+# Gün gün göster
 for gun in hafta_gunleri:
+    gun_str = gun.strftime("%Y-%m-%d")
+    gun_veri = df[df["tarih"] == gun_str]
     st.markdown(f"### 📌 {gun.strftime('%d %B %Y (%A)')}")
-    gun_df = df[df["tarih"] == gun.strftime("%Y-%m-%d")]
 
-    if gun_df.empty:
-        st.info("Bu gün için teslimat yok.")
-        continue
+    if gun_veri.empty:
+        st.info("Henüz planlanmış teslimat yok.")
 
-    for tur in sorted(gun_df["tur"].dropna().unique()):
-        st.markdown(f"#### 🚚 {tur}. Tur")
-        tur_df = gun_df[gun_df["tur"] == tur].sort_values("sira")
+    turlar = gun_veri["tur"].dropna().unique()
+    for tur in sorted(turlar):
+        tur_veri = gun_veri[gun_veri["tur"] == tur].sort_values("sira")
+        with st.expander(f"🚛 {tur}. Tur", expanded=False):
+            st.dataframe(
+                tur_veri[["sira", "musteri", "not"]].reset_index(drop=True),
+                hide_index=True,
+                use_container_width=True
+            )
 
-        for i, row in tur_df.iterrows():
-            with st.expander(f"{row['sira']}. {row['musteri']}"):
-                musteri = st.text_input("Müşteri Adı", value=row["musteri"], key=f"musteri_{i}")
-                not_ = st.text_input("Not", value=row["not"], key=f"not_{i}")
-                sira = st.number_input("Sıra No", min_value=1, value=int(row["sira"]), key=f"sira_{i}")
+    with st.expander("➕ Yeni Tur Ekle", expanded=False):
+        yeni_tur_no = st.number_input("Tur No", min_value=1, max_value=10, value=1, key=f"tur_no_{gun_str}")
+        teslimat_sayisi = st.number_input("Teslimat Noktası", 1, 10, 3, key=f"nokta_{gun_str}")
+        musteriler = [st.text_input(f"{i+1}. Müşteri", key=f"m_{gun_str}_{i}") for i in range(teslimat_sayisi)]
+        notlar = [st.text_input(f"{i+1}. Not", key=f"n_{gun_str}_{i}") for i in range(teslimat_sayisi)]
 
-                yeni_tarih = st.date_input("Yeni Tarih", value=row["tarih"], key=f"tarih_{i}")
-                yeni_tur = st.number_input("Yeni Tur", min_value=1, max_value=10, value=int(row["tur"]), key=f"tur_{i}")
+        if st.button("📥 Kaydet", key=f"save_{gun_str}"):
+            yeni_kayitlar = pd.DataFrame({
+                "tarih": [gun_str] * teslimat_sayisi,
+                "tur": [yeni_tur_no] * teslimat_sayisi,
+                "sira": list(range(1, teslimat_sayisi + 1)),
+                "musteri": musteriler,
+                "not": notlar
+            })
+            df = pd.concat([df, yeni_kayitlar], ignore_index=True)
+            save_data(df)
+            st.success("Yeni tur eklendi.")
+            st.experimental_rerun()
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("📥 Güncelle", key=f"guncelle_{i}"):
-                        df.drop(index=i, inplace=True)
-                        yeni_kayit = pd.DataFrame.from_records([{
-                            "tarih": yeni_tarih.strftime("%Y-%m-%d"),
-                            "tur": yeni_tur,
-                            "sira": sira,
-                            "musteri": musteri,
-                            "not": not_
-                        }])
-                        df = pd.concat([df, yeni_kayit], ignore_index=True)
-                        save_data(df)
-                        st.success("Kayıt güncellendi")
-                        st.experimental_rerun()
-                with col2:
-                    if st.button("🗑️ Sil", key=f"sil_{i}"):
-                        df.drop(index=i, inplace=True)
-                        save_data(df)
-                        st.success("Kayıt silindi")
-                        st.experimental_rerun()
